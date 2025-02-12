@@ -1,0 +1,178 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+from google.colab import drive
+
+from google.colab import drive
+
+# Mount Google Drive to the '/content/drive' directory
+drive.mount('/content/drive')
+
+import pandas as pd
+
+df = pd.read_csv('/content/drive/MyDrive/cybersecurity_intrusion_data.csv')
+
+print("Data shape:", df.shape)
+print("\nFirst few rows:")
+print(df.head())
+
+# Drop unnecassary id column
+df = df.drop(columns="session_id", axis=1)
+
+
+# Extract info about data
+df.info()
+
+# Seperate categorical and numerical columns
+categorical_cols = df.select_dtypes(include="object").columns.tolist()
+numerical_cols = df.select_dtypes(include="int64, float64").columns.tolist()
+
+# Import the SimpleImputer class from sklearn.impute
+from sklearn.impute import SimpleImputer
+# Fill NaN values
+imputer = SimpleImputer(strategy="most_frequent")
+df[['encryption_used']] = imputer.fit_transform(df[['encryption_used']])
+
+
+df.isnull().sum()
+
+# Encode categorical columns (One Hot Encoding)
+df = pd.get_dummies(df, columns=categorical_cols, drop_first=True, dtype=int)
+
+df.head()
+
+# Determine features and target
+y = df['attack_detected']
+X = df.drop(columns='attack_detected', axis=1)
+
+# Seperate data to train and test parts
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=22)
+
+# Parameter grid for GridSearchCV
+param_grid = {
+    'n_estimators': [100, 200, 400, 500],
+    'max_depth': [3, 5, 10, 20],
+    'min_samples_split': [2, 5, 10, 20]
+}
+
+# Define model
+rf = RandomForestClassifier(random_state=22)
+
+# Make sure you have the necessary import
+from sklearn.model_selection import GridSearchCV
+
+# Apply GridSearchCV
+grid_search = GridSearchCV(rf, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+
+# Apply GridSearchCV
+grid_search = GridSearchCV(rf, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+
+# Fit GridSearchCV
+model = grid_search.fit(X_train, y_train)
+
+print(f"Best parameters: {model.best_params_}")
+print(f"Best accuracy score: {model.best_score_}")
+
+# Make sure you have the necessary import
+from sklearn.model_selection import GridSearchCV
+
+# Apply GridSearchCV, explicitly setting refit=True
+grid_search = GridSearchCV(rf, param_grid, cv=5, scoring='accuracy', n_jobs=-1, refit=True) # Added refit=True
+
+# Fit GridSearchCV
+model = grid_search.fit(X_train, y_train)
+
+# Test it with best model
+best_model = model.best_estimator_ # Access the best estimator after refitting
+
+# Predict outputs
+predictions = best_model.predict(X_test)
+
+
+# Import the accuracy_score function
+from sklearn.metrics import accuracy_score
+print(f"Test set accuracy score: {accuracy_score(y_test, predictions)}")
+
+
+
+import matplotlib.pyplot as plt
+
+# Assuming 'y_test' and 'predictions' are available from your previous code
+
+# Create the plot
+plt.figure(figsize=(8, 6))
+plt.plot(range(len(y_test)), y_test, label='Actual', color='blue')  # Actual values in blue
+plt.plot(range(len(predictions)), predictions, label='Predicted', color='red')  # Predicted values in red
+
+# Customize the plot
+plt.xlabel('Data Point')
+plt.ylabel('Value')
+plt.title('Actual vs. Predicted Values')
+plt.legend()
+plt.grid(True)
+
+# Show the plot
+plt.show()
+
+
+# Compute and print the confusion matrix
+cm = confusion_matrix(y_test, predictions)
+print("Confusion Matrix:")
+print(cm)
+
+# You can also visualize the confusion matrix using seaborn's heatmap
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+            xticklabels=['No Attack', 'Attack'], yticklabels=['No Attack', 'Attack'])
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.title('Confusion Matrix')
+plt.show()
+
+
+
+
+#Save the model
+import joblib
+joblib.dump(best_model, '/content/drive/MyDrive/intrusion_model.pkl')
+
+
+# Load the saved model
+import joblib
+model = joblib.load('/content/drive/MyDrive/intrusion_model.pkl')
+
+# Convert the model to ONNX format
+!pip install skl2onnx onnx onnx-tf
+from skl2onnx import convert_sklearn
+from skl2onnx.common.data_types import FloatTensorType
+import onnx
+import onnx_tf
+import tensorflow as tf
+
+# Define the input shape for the ONNX model
+initial_type = [('float_input', FloatTensorType([None, X_train.shape[1]]))]
+
+# Convert the scikit-learn model to ONNX
+onnx_model = convert_sklearn(model, initial_types=initial_type)
+
+# Save the ONNX model to a file
+with open("/content/drive/MyDrive/intrusion_model.onnx", "wb") as f:
+    f.write(onnx_model.SerializeToString())
+
+# Convert the ONNX model to TensorFlow Lite
+tf_rep = onnx_tf.backend.prepare(onnx_model)
+tf_rep.export_graph("/content/drive/MyDrive/intrusion_model_tf")
+
+# Convert the TensorFlow model to TensorFlow Lite
+converter = tf.lite.TFLiteConverter.from_saved_model("/content/drive/MyDrive/intrusion_model_tf")
+tflite_model = converter.convert()
+
+# Save the TensorFlow Lite model to a file
+with open('/content/drive/MyDrive/intrusion_model.tflite', 'wb') as f:
+  f.write(tflite_model)
